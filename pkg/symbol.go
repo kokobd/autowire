@@ -1,16 +1,20 @@
 package pkg
 
 import (
-	"github.com/pkg/errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"strings"
+
+	"github.com/pkg/errors"
 )
 
 type Symbol struct {
 	Kind        SymbolKind
 	Name        string
 	Annotations []Annotation
+	// only for kind == struct
+	Fields []SymbolField
 }
 
 type SymbolKind uint8
@@ -20,6 +24,11 @@ const (
 	SymbolKindFunction
 	SymbolKindVariable
 )
+
+type SymbolField struct {
+	Name        string
+	Annotations []Annotation
+}
 
 func ParseSymbols(fileContent string) ([]Symbol, error) {
 	fileSet := token.NewFileSet()
@@ -31,10 +40,17 @@ func ParseSymbols(fileContent string) ([]Symbol, error) {
 	for _, decl_ := range file.Decls {
 		switch decl := decl_.(type) {
 		case *ast.FuncDecl:
+			annotations, err := extractAnnotations(decl.Doc)
+			if err != nil {
+				return nil, err
+			}
+			if annotations == nil {
+				continue
+			}
 			symbols = append(symbols, Symbol{
 				Name:        decl.Name.Name,
 				Kind:        SymbolKindFunction,
-				Annotations: nil, // TODO
+				Annotations: annotations,
 			})
 		case *ast.GenDecl:
 			switch decl.Tok {
@@ -42,18 +58,33 @@ func ParseSymbols(fileContent string) ([]Symbol, error) {
 				fallthrough
 			case token.VAR:
 				for i := range decl.Specs {
-					names := decl.Specs[i].(*ast.ValueSpec).Names
+					spec := decl.Specs[i].(*ast.ValueSpec)
+					annotations, err := extractAnnotations(spec.Doc)
+					if err != nil {
+						return nil, err
+					}
+					if annotations == nil {
+						continue
+					}
+					names := spec.Names
 					for j := range names {
 						symbols = append(symbols, Symbol{
 							Kind:        SymbolKindVariable,
 							Name:        names[j].Name,
-							Annotations: nil, // TODO
+							Annotations: annotations,
 						})
 					}
 				}
 			case token.TYPE:
 				for i := range decl.Specs {
 					spec := decl.Specs[i].(*ast.TypeSpec)
+					annotations, err := extractAnnotations(decl.Doc)
+					if err != nil {
+						return nil, err
+					}
+					if annotations == nil {
+						continue
+					}
 					_, ok := spec.Type.(*ast.StructType)
 					if !ok {
 						continue
@@ -61,12 +92,34 @@ func ParseSymbols(fileContent string) ([]Symbol, error) {
 					symbols = append(symbols, Symbol{
 						Kind:        SymbolKindStruct,
 						Name:        spec.Name.Name,
-						Annotations: nil, // TODO
+						Annotations: annotations,
 					})
 				}
 			}
 		}
 	}
 
-	panic("not implemented")
+	return symbols, nil
+}
+
+func extractAnnotations(doc *ast.CommentGroup) ([]Annotation, error) {
+	if doc == nil {
+		return nil, nil
+	}
+	text := doc.Text()
+	lines := strings.Split(text, "\n")
+	var annotations []Annotation
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "@") {
+			annotation, err := ParseAnnotation(line)
+			if err != nil {
+				return nil, err
+			}
+			if annotation != nil {
+				annotations = append(annotations, *annotation)
+			}
+		}
+	}
+	return annotations, nil
 }

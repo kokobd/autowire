@@ -6,11 +6,13 @@ import (
 	"unicode"
 )
 
+// Annotation ast
 type Annotation struct {
 	Name string
 	Args map[string]string
 }
 
+// ParseAnnotation try parse string starts with '@' to Annotation
 func ParseAnnotation(str string) (*Annotation, error) {
 	if len(str) == 0 || str[0] != '@' {
 		return nil, errors.New("annotation must begin with '@'")

@@ -1,0 +1,12 @@
+{
+  "search.useIgnoreFiles": true,
+  "go.buildOnSave": "package",
+  "editor.formatOnSave": true,
+  "go.lintOnSave": "file",
+  "go.formatTool": "goimports",
+  "go.autocompleteUnimportedPackages": true,
+  "[go]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": false
+  },
+}
